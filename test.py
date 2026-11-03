@@ -1,79 +1,86 @@
 
 from pathlib import Path
 import pickle
-import pandas as pd
 
+import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, classification_report
 
 BASE_DIR = Path(__file__).resolve().parent
 
-# Load dataset
-df = pd.read_csv(BASE_DIR / "Iris - Iris.csv")
-df = df.drop(columns=["Id"], errors="ignore")
+DATA_PATH = BASE_DIR / "Iris - Iris.csv"
+MODEL_PATH = BASE_DIR / "Iris_Model.pkl"
+SCALER_PATH = BASE_DIR / "Iris_Scaler.pkl"
 
-# Prepare features and target
-X = df.drop(columns=["Species"])
-y = df["Species"].map({
+FEATURES = [
+    "SepalLengthCm",
+    "SepalWidthCm",
+    "PetalLengthCm",
+    "PetalWidthCm"
+]
+
+LABELS = {
     "Iris-setosa": 0,
     "Iris-versicolor": 1,
     "Iris-virginica": 2
-})
+}
 
-if y.isna().any():
-    raise ValueError("Unknown species labels found in dataset.")
 
-# Reproduce the same split used in train.py
-X_train, X_test, y_train, y_test = train_test_split(
-    X,
-    y,
-    test_size=0.2,
-    random_state=42,
-    stratify=y
-)
+def test_model():
 
-# Load trained model and scaler
-with open(BASE_DIR / "Iris_Model.pkl", "rb") as f:
-    model = pickle.load(f)
+    assert DATA_PATH.exists(), "Dataset missing"
+    assert MODEL_PATH.exists(), "Model file missing"
+    assert SCALER_PATH.exists(), "Scaler file missing"
 
-with open(BASE_DIR / "Iris_Scaler.pkl", "rb") as f:
-    scaler = pickle.load(f)
+    df = pd.read_csv(DATA_PATH)
+    df = df.drop(columns=["Id"], errors="ignore")
 
-# Transform and predict
-X_train_scaled = scaler.transform(X_train)
-X_test_scaled = scaler.transform(X_test)
+    X = df[FEATURES]
+    y = df["Species"].map(LABELS)
 
-train_predictions = model.predict(X_train_scaled)
-test_predictions = model.predict(X_test_scaled)
+    assert not y.isna().any(), "Invalid species labels"
 
-# Calculate accuracy
-train_accuracy = accuracy_score(y_train, train_predictions)
-test_accuracy = accuracy_score(y_test, test_predictions)
-
-print("Training samples:", len(X_train))
-print("Testing samples:", len(X_test))
-print(f"Training Accuracy: {train_accuracy * 100:.2f}%")
-print(f"Testing Accuracy: {test_accuracy * 100:.2f}%")
-
-print("\nTest Classification Report:")
-print(classification_report(
-    y_test,
-    test_predictions,
-    target_names=[
-        "Iris-setosa",
-        "Iris-versicolor",
-        "Iris-virginica"
-    ],
-    zero_division=0
-))
-
-# Assertion: test accuracy should not exceed training accuracy
-# This checks your desired condition without crashing the script.
-if test_accuracy < train_accuracy:
-    print("\nAssertion passed: Test accuracy is lower than training accuracy.")
-else:
-    print(
-        "\nAssertion condition not met: Test accuracy is equal to "
-        "or greater than training accuracy."
+    X_train, X_test, y_train, y_test = train_test_split(
+        X,
+        y,
+        test_size=0.2,
+        random_state=42,
+        stratify=y
     )
+
+    with open(MODEL_PATH, "rb") as f:
+        model = pickle.load(f)
+
+    with open(SCALER_PATH, "rb") as f:
+        scaler = pickle.load(f)
+
+    X_test_scaled = scaler.transform(X_test)
+
+    predictions = model.predict(X_test_scaled)
+
+    accuracy = accuracy_score(y_test, predictions)
+
+    print("\nMODEL TESTING RESULTS")
+    print("---------------------")
+    print("Total test samples:", len(X_test))
+    print("Correct predictions:", (predictions == y_test).sum())
+    print(f"Accuracy: {accuracy * 100:.2f}%")
+
+    print("\nClassification Report:")
+    print(classification_report(
+        y_test,
+        predictions,
+        target_names=list(LABELS.keys()),
+        zero_division=0
+    ))
+
+    assert len(predictions) == len(y_test), "Prediction count mismatch"
+    assert accuracy >= 0.80, "Model accuracy is below 80%"
+
+    print("\nALL TESTS PASSED!")
+
+
+if __name__ == "__main__":
+    test_model()
+
 
